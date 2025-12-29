@@ -1,0 +1,51 @@
+# OpenBSD GCP Image Build Artifacts
+
+# Image files - DO NOT commit these large files
+*.iso
+*.qcow2
+*.gz
+*.raw
+*.vmdk
+*.tar.gz
+*.raw.gz
+
+# Build artifacts directory
+build/artifacts/*.iso
+build/artifacts/*.qcow2
+build/artifacts/*.gz
+build/artifacts/*.raw
+build/cache/*.iso
+
+# Temporary build files in any directory
+*/auto_install.conf
+*/disklabel.template
+*/boot.conf
+*/random.seed
+*/install.site
+*/site78/
+*/site*.tgz
+auto_install.conf
+disklabel.template
+boot.conf
+random.seed
+install.site
+site78/
+site*.tgz
+
+# Patched ISO
+*-patched.iso
+
+# macOS
+.DS_Store
+
+# Linux
+*~
+
+# Editor files
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Logs
+*.log
