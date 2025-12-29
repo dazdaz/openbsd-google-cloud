@@ -86,9 +86,6 @@ gcp-openbsd/
 ├── WHY-ISO-PATCHING.md             # Explanation of ISO patching
 ├── config/
 │   └── default.conf                # Default configuration
-├── manual/                         # Manual/advanced scripts
-│   ├── prepare-iso.sh              # ISO preparation (rarely needed)
-│   └── patch-iso.sh                # ISO patching (rarely needed)
 ├── templates/
 │   ├── auto_install.conf           # Installation template
 │   ├── disklabel.template          # Partitioning template
@@ -214,12 +211,6 @@ export PROJECT_ID="your-gcp-project"
 ./03-gcp-image-import.sh --image-file build/artifacts/openbsd-7.8.raw.gz --project-id ${PROJECT_ID}
 ```
 
-#### **Pattern 3: Manual/Modular Workflow (Advanced)**
-```bash
-# Only use these if you need granular control (located in manual/ directory)
-./manual/prepare-iso.sh   # Download ISO only (~2-3 min)
-./manual/patch-iso.sh     # Patch ISO with autoinstall (~3-5 min)
-# Then manually use the patched ISO
 ```
 
 ### **Why 01-build-openbsd-image.sh Takes 30 Minutes**
@@ -242,21 +233,12 @@ The 30-minute runtime is because it performs a **complete OpenBSD installation f
 | **01-build-openbsd-image.sh** | Complete deployment | ~30 min | **Start here** - includes everything |
 | **02-setup-gcp-service-account.sh** | GCP service account setup | ~2 min | One-time setup before GCP deployment |
 | **03-gcp-image-import.sh** | Cloud deployment | ~5-10 min | After 01 completes, for GCP |
-| **manual/prepare-iso.sh** | ISO download only | ~2-3 min | Advanced: Manual ISO work only |
-| **manual/patch-iso.sh** | ISO patching only | ~3-5 min | Advanced: Manual ISO patching only |
-
-### **⚠️ Important Notes**
 
 - **01-build-openbsd-image.sh is complete and standalone** - includes ISO download, configuration, installation, and image creation
-- **manual/ scripts are for advanced users** - not required when using the main script
 - **03-gcp-image-import.sh requires 01 to complete first** - it uploads the final images to Google Cloud
-
-### **Quick Decision Guide**
 
 - **"I want OpenBSD VMs locally"** → Use `./01-build-openbsd-image.sh`
 - **"I want OpenBSD on GCP"** → Use `./01-build-openbsd-image.sh`, then `./02-setup-gcp-service-account.sh setup`, then `./03-gcp-image-import.sh`
-- **"I just need the ISO"** → Use `./manual/prepare-iso.sh` (advanced)
-- **"I want to patch my own ISO"** → Use `./manual/patch-iso.sh` (advanced)
 
 ## 🔍 How It Works
 
