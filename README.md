@@ -1,8 +1,6 @@
 # OpenBSD QEMU Deployment Script
 
-A comprehensive bash script that automates the deployment of QEMU and creates patched OpenBSD images for local use. This solution transforms the interactive OpenBSD installation process into a fully automated pipeline.
-
-> ⚠️ **WARNING**: Google Cloud's VM Migration API does **not support OpenBSD**. The `03-gcp-image-import.sh` script will not work because OpenBSD is not recognized as a valid guest operating system by the VM Migration service. Alternative approaches for importing OpenBSD images to GCP are still being investigated.
+A comprehensive bash script that automates the deployment of QEMU and creates patched OpenBSD images for local use and GCP deployment.
 
 ## 🚀 Features
 
@@ -78,7 +76,8 @@ chmod +x *.sh
 gcp-openbsd/
 ├── 01-build-openbsd-image.sh       # Main build script (start here)
 ├── 02-setup-gcp-service-account.sh # GCP service account manager
-├── 03-gcp-image-import.sh          # GCP image import script
+├── 03-upload-to-gcs.sh             # Upload VMDK to GCS bucket
+├── 04-gcp-image-import.sh          # Import image and create VM
 ├── README.md                       # This file
 ├── PLAN.md                         # Project architecture and plan
 ├── DEPLOYMENT.md                   # GCP deployment guide
@@ -200,15 +199,18 @@ The scripts are designed as a **modular pipeline** with different use cases:
 
 #### **Pattern 2: Cloud Deployment**
 ```bash
-# Step 1: Create local images
+# Step 1: Create local images (outputs VMDK, QCOW2, tar.gz)
 ./01-build-openbsd-image.sh
 
 # Step 2: Set up GCP service account (one-time setup)
 export PROJECT_ID="your-gcp-project"
 ./02-setup-gcp-service-account.sh setup
 
-# Step 3: Deploy to GCP (after 01 completes)
-./03-gcp-image-import.sh --image-file build/artifacts/openbsd-7.8.raw.gz --project-id ${PROJECT_ID}
+# Step 3: Upload VMDK to GCS
+./03-upload-to-gcs.sh --source-file build/artifacts/openbsd-7.8.vmdk --bucket ${PROJECT_ID}-images
+
+# Step 4: Import image and create VM
+./04-gcp-image-import.sh --source-file gs://${PROJECT_ID}-images/openbsd-7.8.vmdk --name openbsd-78 --create-vm
 ```
 
 ```
@@ -230,15 +232,17 @@ The 30-minute runtime is because it performs a **complete OpenBSD installation f
 
 | Script | Purpose | Duration | When to Use |
 |--------|---------|----------|-------------|
-| **01-build-openbsd-image.sh** | Complete deployment | ~30 min | **Start here** - includes everything |
+| **01-build-openbsd-image.sh** | Complete deployment | ~30 min | **Start here** - builds VMDK, QCOW2, tar.gz |
 | **02-setup-gcp-service-account.sh** | GCP service account setup | ~2 min | One-time setup before GCP deployment |
-| **03-gcp-image-import.sh** | Cloud deployment | ~5-10 min | After 01 completes, for GCP |
+| **03-upload-to-gcs.sh** | Upload VMDK to GCS | ~5 min | After 01 completes |
+| **04-gcp-image-import.sh** | Import image and create VM | ~10 min | After 03 completes |
 
 - **01-build-openbsd-image.sh is complete and standalone** - includes ISO download, configuration, installation, and image creation
-- **03-gcp-image-import.sh requires 01 to complete first** - it uploads the final images to Google Cloud
+- **03-upload-to-gcs.sh uploads the VMDK** - VMDK supports sparse files for efficient upload
+- **04-gcp-image-import.sh imports and creates VM** - uses `--data-disk` to skip OS adaptation
 
 - **"I want OpenBSD VMs locally"** → Use `./01-build-openbsd-image.sh`
-- **"I want OpenBSD on GCP"** → Use `./01-build-openbsd-image.sh`, then `./02-setup-gcp-service-account.sh setup`, then `./03-gcp-image-import.sh`
+- **"I want OpenBSD on GCP"** → Use `01`, then `02` (one-time), then `03`, then `04`
 
 ## 🔍 How It Works
 
@@ -266,8 +270,9 @@ The deployment process follows these automated steps:
 
 The entire process should take 15-30 minutes and produce:
 
-- `build/artifacts/openbsd-7.8.qcow2` (QCOW2 image)
-- `build/artifacts/openbsd-7.8.raw.gz` (Compressed raw image)
+- `build/artifacts/openbsd-7.8.qcow2` (QCOW2 image for local testing)
+- `build/artifacts/openbsd-7.8.vmdk` (VMDK image for GCP upload - sparse files)
+- `build/artifacts/openbsd-7.8-gce.tar.gz` (Alternative GCP format)
 
 ### **CD-ROM Device Mapping**
 
@@ -316,60 +321,45 @@ export PROJECT_ID="your-gcp-project"
 ./02-setup-gcp-service-account.sh cleanup
 ```
 
-### **GCP Deployment with VM Migration API**
+### **GCP Deployment Workflow**
 
-> ⚠️ **WARNING**: Google Cloud's VM Migration API does **not support OpenBSD**. The `03-gcp-image-import.sh` script will not work because OpenBSD is not recognized as a valid guest operating system by the VM Migration service. Alternative approaches for importing OpenBSD images to GCP are still being investigated.
+OpenBSD is not officially supported by GCP, but it can be imported using the `--data-disk` flag which skips OS adaptation (no Linux drivers or config modifications).
 
-The `03-gcp-image-import.sh` script uses Google Cloud's **VM Migration API** instead of standard image creation commands. Here's why:
-
-#### **Why VM Migration API?**
-
-OpenBSD is not one of Google Cloud's officially supported operating systems. The VM Migration API is specifically designed to import **foreign** or **custom** disk images from other platforms into GCP, making it the appropriate tool for this use case.
-
-#### **Technical Advantages**
-
-1. **Better Raw Disk Format Handling**
-   - Built to handle raw disk images from various sources (on-premises, VMware, etc.)
-   - Properly converts raw disk formats into GCP's native image format
-   - More robust than standard image creation for non-standard OSes
-
-2. **Non-Standard OS Support**
-   - Designed for importing operating systems not in GCP's standard catalog
-   - Handles boot configurations and disk layouts that differ from standard GCP images
-   - Better compatibility with custom partitioning schemes (like OpenBSD's disklabel)
-
-3. **Proper Disk Structure Requirements**
-   - Creates `tar.gz` containing `disk.raw` (GCP requirement)
-   - API handles conversion to GCP's image format automatically
-   - Provides robust import validation and error handling
-
-#### **Deployment Process**
-
+#### **Step 1: Build the Image**
 ```bash
-# 1. Check if VM Migration API is enabled
-gcloud services enable vmmigration.googleapis.com
+./01-build-openbsd-image.sh
+```
+This produces `build/artifacts/openbsd-7.8.vmdk` (VMDK with sparse files for efficient upload).
 
-# 2. Prepare disk image (decompress and repackage)
-gunzip -c openbsd-7.8.raw.gz > disk.raw
-tar -czf openbsd.tar.gz disk.raw
-
-# 3. Upload to Google Cloud Storage
-gsutil cp openbsd.tar.gz gs://bucket/
-
-# 4. Import using Migration API
-gcloud compute migration image-imports create openbsd-image \
-    --source-file=gs://bucket/openbsd.tar.gz \
-    --location=us-central1
+#### **Step 2: Upload to GCS**
+```bash
+./03-upload-to-gcs.sh --source-file build/artifacts/openbsd-7.8.vmdk --bucket ${PROJECT_ID}-images
 ```
 
-#### **Why Not Standard Image Creation?**
+#### **Step 3: Import and Create VM**
+```bash
+./04-gcp-image-import.sh --source-file gs://${PROJECT_ID}-images/openbsd-7.8.vmdk --name openbsd-78 --create-vm
+```
 
-The standard approach (`gcloud compute images create --source-uri=...`) is designed for supported operating systems and may not properly handle:
-- OpenBSD's unique boot configuration
-- Custom disk partitioning schemes
-- Non-standard filesystem layouts
+#### **Why VMDK Format?**
+- VMDK supports sparse files, making uploads much smaller (~700MB vs 30GB raw)
+- `gcloud compute images import` converts VMDK to GCE-compatible format
+- The `--data-disk` flag prevents GCP from trying to install Linux drivers
 
-The VM Migration API provides the proper import validation and conversion needed for foreign operating systems.
+#### **Post-Deployment**
+After VM creation, you may need to create a firewall rule to allow SSH:
+```bash
+gcloud compute firewall-rules create allow-ssh \
+    --allow=tcp:22 \
+    --source-ranges=0.0.0.0/0 \
+    --project=${PROJECT_ID}
+```
+
+Connect via SSH:
+```bash
+ssh -l root <EXTERNAL_IP>
+# Password: root
+```
 
 ## 🛡️ Security Features
 
