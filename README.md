@@ -1,6 +1,7 @@
 # OpenBSD QEMU Deployment Script
 
-A comprehensive bash script that automates the deployment of QEMU and creates patched OpenBSD images for local use and GCP deployment.
+A comprehensive bash script that automates the deployment of QEMU and creates patched OpenBSD images for local use and
+deployment to Google Cloud.
 
 ## 🚀 Features
 
@@ -447,21 +448,6 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 - **QEMU Team**: For the powerful virtualization platform
 - **Community Contributors**: For feedback, testing, and improvements
 
-## 🗺️ Roadmap
-
-### Planned Features
-
-- **GUI Interface**: Web-based configuration and management
-- **Container Support**: Docker-based builds and deployment
-- **Plugin System**: Extensible architecture for custom features
-
-### Future Enhancements
-
-- **Performance Monitoring**: Real-time build metrics and optimization
-- **Advanced Security**: Enhanced security features and compliance
-- **Multi-Architecture**: Support for ARM and other architectures
-- **Enterprise Features**: Advanced features for enterprise deployments
-
 ---
 
-**Built with ❤️ for the OpenBSD and local virtualization communities**
+**Built with ❤️ for OpenBSD**
