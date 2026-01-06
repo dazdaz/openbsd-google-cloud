@@ -628,6 +628,11 @@ EOF
     # Convert to QCOW2 for local use
     qemu-img convert -f raw -O qcow2 "${disk_raw}" "${disk_qcow2}"
     
+    # Convert to VMDK (sparse format, efficient for GCP upload)
+    local disk_vmdk="${OUTPUT_DIR}/artifacts/openbsd-${version}.vmdk"
+    log_info "Creating VMDK image (sparse format for efficient upload)..."
+    qemu-img convert -f raw -O vmdk -o subformat=streamOptimized "${disk_raw}" "${disk_vmdk}"
+    
     # Create GCP-compatible tar.gz (following golang/build approach)
     local gce_targz="${OUTPUT_DIR}/artifacts/openbsd-${version}-gce.tar.gz"
     log_info "Creating GCP-compatible image (tar.gz with disk.raw)..."
@@ -636,9 +641,14 @@ EOF
     log_success "Disk image created successfully"
     log_info "Generated files:"
     log_info "  - QCOW2 (for local testing): ${disk_qcow2}"
+    log_info "  - VMDK (for GCP import): ${disk_vmdk}"
     log_info "  - GCP image (tar.gz): ${gce_targz}"
     log_info ""
-    log_info "To upload to GCP:"
+    log_info "To upload to GCP (recommended - VMDK with sparse files):"
+    log_info "  gsutil cp ${disk_vmdk} gs://YOUR_BUCKET/openbsd-${version}.vmdk"
+    log_info "  gcloud compute images import openbsd-${version} --source-file=gs://YOUR_BUCKET/openbsd-${version}.vmdk --os=openbsd-7 --data-disk"
+    log_info ""
+    log_info "Alternative (tar.gz):"
     log_info "  gsutil cp ${gce_targz} gs://YOUR_BUCKET/openbsd-${version}.tar.gz"
     log_info "  gcloud compute images create openbsd-${version} --source-uri=gs://YOUR_BUCKET/openbsd-${version}.tar.gz"
 }
